@@ -58,7 +58,7 @@ const KEY = "recycle-mark-v1"; // gitleaks:allow 記録の名前（鍵ではな�
   const allText = gen;
   check("言い切りすぎない（マークがあれば必ずリサイクルされる、などと書かない）", !/必ずリサイクル|絶対に|これで安心/.test(allText + html));
   check("ごみの出し方は市町村の決まりに従うよう、遊び方と「このゲームについて」に書く", (html.match(/市町村の/g) || []).length >= 2);
-  check("マークの絵を出さない（形を一次資料で確かめていないので、名前で答える）", !/<svg|<img/.test(gen));
+  check("マークの絵を出さない（形を一次資料で確かめていないので、名前で答える）", !/<svg|<img/.test(gen) && !/<svg/.test(html));
   const FUNNY = ["（うそ）", "爆笑", "ツッコミ", "草生え", "ｗｗ"];
   check("お笑いの言葉を入れない（本物っぽさ優先）", !FUNNY.some((w) => (allText + html).includes(w)));
   check("gen.js は Math.random を使わない（同じ日はだれでも同じ問題）", !/Math\.random/.test(gen));
@@ -223,6 +223,7 @@ try {
     const n = await p.locator(".achs > div").count();
     check("実績は10〜14個で、まだのものは「いま/目標」を出す", n >= 10 && n <= 14 && (await p.textContent(".achs")).includes("いま "));
     await p.click("#back"); await p.click("#go-dex");
+    check("マーク帳の上に、9つのマークの早見（何に付けるか）がある", (await p.locator(".marks > div").count()) === Object.keys(W.M).length);
     check("マーク帳：まだの種類は名前を出さず「？？？」", (await p.locator(".dex .no").count()) > 0 && (await p.textContent(".dex .no")).includes("？？？"));
     await p.close();
   }

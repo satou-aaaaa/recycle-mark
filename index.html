@@ -76,6 +76,9 @@ button.sub:disabled{color:var(--ink2);cursor:default;border-style:dashed}
 .verdict{background:var(--paper);border:2px solid var(--ok);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:8px;box-shadow:0 6px 0 #0006;animation:up .35s ease-out}
 @keyframes up{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
 .verdict .hd{font-size:20px;font-weight:800;text-align:center}
+.marks{display:grid;gap:8px}
+.marks>div{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:13px;line-height:1.6}
+h2.sec{font-size:16px;margin:14px 0 6px}
 .verdict .nm{font-size:22px;font-weight:800;text-align:center;color:var(--ok)}
 .verdict .cat{font-size:12px;color:var(--ink2);text-align:center}
 .verdict p{margin:0;font-size:14px;line-height:1.7}
@@ -479,6 +482,18 @@ const same = (r) => r && cur && r.id === cur.id && r.res.length === cur.i && JSO
 function keep() { let ok = false; save((s) => { const r = s.runs[MODE]; if (!same(r)) return; ok = true; const o = r.cur && r.cur.i === cur.i ? r.cur : null; if (o) { cur.m = Math.max(cur.m, o.m || 0); cur.hints = Math.max(cur.hints, o.hints || 0); } r.cur = { i: cur.i, ph: cur.ph, m: cur.m, hints: cur.hints, bad: cur.bad, out: cur.out, look: cur.look }; }); return ok; }
 function stale() { toast("別のタブで進んでいます。読み直します"); play(); }
 const lbl = () => { const r = load().runs[MODE]; if (!r) return ""; return cur.mode === "e" ? `とことん ${cur.i + 1}問目` : `${cur.mode === "h" ? "上級" : cur.mode === "a" ? md(cur.date) + "の5問" : "今日の5問"} ${cur.i + 1}/${r.list.length}`; };
+// マーク帳の早見（どのマークを、何に付けるか）
+const MARKS = [
+  ["PET", "飲み物・お酒・しょうゆなどのペットボトル（法律で表示）"],
+  ["PLA", "プラスチックの容器や包装（法律で表示）"],
+  ["KAMI", "紙の容器や包装（法律で表示。紙パック・段ボールは別）"],
+  ["ST", "飲み物・お酒のスチール缶（法律で表示）"],
+  ["AL", "飲み物・お酒のアルミ缶（法律で表示）"],
+  ["PACK", "アルミを使わない飲み物の紙パック（業界が付ける）"],
+  ["DAN", "段ボール（業界が付ける）"],
+  ["BIN", "飲み物のガラスびん（業界が付ける）"],
+  ["NONE", "容器や包装でない物・缶詰の缶など（表示の義務はない）"],
+];
 function chHtml(x, j) {
   const c = cur, okJ = c.ch.indexOf(c.q.ok), st = c.ph === "done" && j === okJ ? " hit" : c.bad.includes(j) ? " bad" : c.out.includes(j) ? " out" : "";
   const dis = c.ph !== "pick" || c.bad.includes(j) || c.out.includes(j);
@@ -614,6 +629,9 @@ function result(mode, k, fresh1) {
 function dex() {
   const s = load();
   show(`<header><button class="icon" id="back" aria-label="ホームへもどる">←</button><h1>マーク帳 ${dexN(s)}/${NT}<small>正しく選んだ品物の種類が集まります</small></h1><span></span></header>
+    <h2 class="sec">マークの早見</h2>
+    <div class="marks">${MARKS.map(([k, d]) => `<div><b>${esc(B.M[k])}</b><br>${esc(d)}</div>`).join("")}</div>
+    <h2 class="sec">品物の種類</h2>
     <div class="dex">${TY.map((T, i) => (s.dex[i] ? `<div><b>✓ ${T.em} ${esc(T.name)}</b>（${s.dex[i]}回）<br>考えどころ：${esc(T.look)}</div>` : `<div class="no"><b>？？？</b>　まだ出会っていない種類</div>`)).join("")}</div>${footer()}`);
   $("back").onclick = home; bindFooter();
 }
