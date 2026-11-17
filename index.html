@@ -322,7 +322,7 @@ const KEY = "recycle-mark-v1", EPOCH = "2026-11-07"; // gitleaks:allow 記録の
 const B = window.RMARK, TY = B.TYPES, NT = TY.length;
 // 復習の鍵（depth.js）：種類|形|種。この3つだけで同じ問題を作り直せる。種類が | より前なので、復習は種類をまぜて出る
 const tagOf = (it) => `${it.t}|${it.v}|${it.s}`;
-const itOf = (tag) => { const a = String(tag).split("|"); if (a.length !== 3 || !a.every((x) => /^\d{1,10}$/.test(x))) return null; const it = { t: +a[0], v: +a[1], s: +a[2] }; return it.t < NT && it.v < B.FORMN[it.t] && it.s < 2 ** 31 ? it : null; };
+const itOf = (tag) => { const a = String(tag).split("|"); if (a.length !== 3 || !a.every((x) => /^\d{1,10}$/.test(x))) return null; const it = { t: +a[0], v: +a[1], s: +a[2] }; if (tagOf(it) !== String(tag)) return null; return it.t < NT && it.v < B.FORMN[it.t] && it.s < 2 ** 31 ? it : null; };
 Depth.setValid((t) => { const it = itOf(t); if (!it) return false; B.make(it); return true; }); // 作り直せない鍵（引き継ぎ・消えた種類）は復習に数えない
 
 // ---- 日付と種（日本時間。だれでも同じ5問）----
@@ -509,6 +509,8 @@ function validCur(c, q, ch) {
   return c.ph === "pick" && Number.isInteger(c.m) && c.m >= 0 && Number.isInteger(c.hints) && c.hints >= 0 && c.hints <= 2 && ints(c.bad) && ints(c.out) && !c.bad.includes(okJ) && !c.out.includes(okJ);
 }
 const same = (r) => r && cur && r.id === cur.id && r.res.length === cur.i && JSON.stringify(r.list[cur.i]) === JSON.stringify(cur.it);
+// 自信を数える前に、別のタブで先へ進んでいないかを見る（先に judge すると、数えたあとで読み直しになる。recycle-mark #7 の CodeRabbit）
+const sameNow = () => same(load().runs[MODE]);
 // 途中を保存する（同じ回・同じ問題のときだけ。まちがい・ヒントの数は別のタブの分より減らさない）
 // まちがえた・ヒントを使ったその時に復習へ入れる（とことんで降りる・閉じるなど、解き終えずにやめても残る）
 function early() { if (cur && cur.ph === "pick" && (cur.m || cur.hints)) Depth.mark(tagOf(cur.it), 1, cur.q.scene); }
@@ -568,6 +570,7 @@ function panel() {
 }
 function tap(j) {
   const c = cur; if (c.ph !== "pick" || c.bad.includes(j) || c.out.includes(j)) return;
+  if (!sameNow()) return stale();
   if (c.ch[j] === c.q.ok) return solve();
   const jd = Depth.judge(false); if (jd && jd.sure) { c.jd = jd; sureCount(false); } // 自信は最初に押した1枚で見る
   c.m++; c.bad.push(j); if (!keep()) return stale(); buzz(8);
@@ -588,6 +591,7 @@ function hint() {
 // 正しいマークを選んだ：記録して、なぜそうするかと出典を見せる
 function solve() {
   const c = cur, q = c.q, rec = { m: c.m, h: c.hints, t: q.t };
+  if (!sameNow()) return stale();
   const jd = Depth.judge(true); if (jd && jd.sure) { c.jd = jd; sureCount(true); }
   let ok = false;
   save((s) => {
