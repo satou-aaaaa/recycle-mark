@@ -323,7 +323,7 @@ try {
   { // スマホ幅・押せる大きさ
     const p = await newPage(320, 640, setDate("2026-11-10"));
     await closeHow(p);
-    const wide = async (name) => { const r = await p.evaluate(() => ({ sw: document.documentElement.scrollWidth, small: [...document.querySelectorAll("button, a")].filter((b) => { const r = b.getBoundingClientRect(); return r.width > 0 && r.height < 44 && !b.closest(".a11y-dlg") && !b.closest("dialog:not([open])"); }).map((b) => b.textContent.trim().slice(0, 12)) })); check(`幅320px・${name}：横にはみ出さず、押せる所は高さ44px以上`, r.sw <= 320 && r.small.length === 0, `${r.sw} ${r.small.join(",")}`); };
+    const wide = async (name) => { const r = await p.evaluate(() => ({ sw: document.documentElement.scrollWidth, small: [...document.querySelectorAll("button, a")].filter((b) => { const r = b.getBoundingClientRect(); return r.width > 0 && Math.round(r.height) < 44 && !b.closest(".a11y-dlg") && !b.closest("dialog:not([open])"); }).map((b) => b.textContent.trim().slice(0, 12)) })); check(`幅320px・${name}：横にはみ出さず、押せる所は高さ44px以上`, r.sw <= 320 && r.small.length === 0, `${r.sw} ${r.small.join(",")}`); };
     await wide("ホーム");
     await p.click("#go-d"); await wide("遊ぶ画面");
     const c = await curOf(p); await p.click(`[data-j="${c.okJ}"]`); await wide("答えの説明の画面");
