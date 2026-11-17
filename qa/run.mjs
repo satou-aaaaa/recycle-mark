@@ -127,6 +127,19 @@ try {
     check(`とことんの並び（500回）：1つの並びの中で同じ種類×形は出ず（${r.T}問）、続けて同じ種類も出さず、前の並びの最後の種類から始めない`, r.eb.length === 0 && r.first === 0, r.eb.join(",") + " 始め:" + r.first);
     await p.close();
   }
+  { // 保存できないブラウザ：帯で知らせ、知らせ続け、保存できたら消す（前は黙って、開き直すと記録が消えた）
+    const p = await newPage(390, 800, () => { window.__origSetItem = Storage.prototype.setItem; Storage.prototype.setItem = function () { throw new Error("full"); }; });
+    await closeHow(p); await p.click("#go-d"); await answer(p);
+    const nw = await p.locator("#savewarn").count();
+    const one = nw === 1 && (await p.textContent("#savewarn")).includes("保存できませんでした");
+    await p.waitForTimeout(2000);
+    const live = await p.textContent("#live"); // 正解の知らせは少し遅れて #live に入るので、そのあとも警告が後ろに付いているかを見る
+    const stay = (await p.locator("#savewarn").count()) === 1 && live.includes("保存できませんでした");
+    await p.evaluate(() => { Storage.prototype.setItem = window.__origSetItem; });
+    await p.click("#next"); await answer(p);
+    check("保存できないと帯がちょうど1つ出て（読み上げの知らせにも出る）2秒たっても残り、保存できるようになったら消える", one && stay && (await p.locator("#savewarn").count()) === 0, `帯${nw} 知らせ「${live}」 stay=${stay}`);
+    await p.close();
+  }
   { // 通しで遊ぶ：今日の5問
     const p = await newPage(390, 800, setDate("2026-11-10"));
     check("はじめて開くと遊び方が出る", await p.evaluate(() => document.getElementById("howto").open));
@@ -258,6 +271,11 @@ try {
   { // 引き継ぎコード（shared-workflows template/qa/transfer-check.mjs）
     const sample = { [KEY]: JSON.stringify({ v: 1, tut: true, days: { "2026-11-07": { r: [{ m: 0, h: 0, t: 3 }] } }, hdays: {}, adays: {}, dex: { 3: 1 }, total: 1, ebest: 2, runs: {}, kofi: {}, ach: {}, t: 1 }) };
     await checkTransfer({ browser, url, game: "recycle-mark", sample, check, open: async (page) => { await page.evaluate(() => { const d = document.getElementById("howto"); if (d.open) d.close(); }); } });
+  }
+  { // 知らせ（.toast）は下のボタンを塞がない（shared-workflows incidents/2026-11-17-known-game-bugs-spread.md）
+    const pt = await browser.newPage(); await pt.goto(url);
+    check("知らせ（.toast）が出ていても、その下のボタンを押せる（pointer-events:none）", await pt.evaluate(() => { const d = document.createElement("div"); d.className = "toast"; document.body.appendChild(d); const v = getComputedStyle(d).pointerEvents; d.remove(); return v === "none"; }));
+    await pt.close();
   }
 } catch (e) {
   check("QA の操作が最後まで完了する", false, e.message.split("\n")[0] + " " + ((e.stack || "").match(/run\.mjs:\d+/) || [""])[0]);
