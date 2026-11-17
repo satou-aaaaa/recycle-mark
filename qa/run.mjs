@@ -10,6 +10,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 import { checkTransfer } from "./transfer-check.mjs";
 import { checkSwStall } from "./sw-check.mjs";
+import { checkDepth } from "./depth-check.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const url = pathToFileURL(path.join(root, "index.html")).href;
@@ -74,14 +75,15 @@ const KEY = "recycle-mark-v1"; // gitleaks:allow 記録の名前（鍵ではな�
 {
   const sw = readFileSync(path.join(root, "sw.js"), "utf8"), man = JSON.parse(readFileSync(path.join(root, "manifest.webmanifest"), "utf8"));
   const shell = JSON.parse(sw.match(/const SHELL = (\[[^\]]*\])/)[1].replace(/'/g, '"'));
-  check("sw.js の SHELL のファイルが全部ある（transfer.js も入っている）", shell.every((f) => f === "./" || existsSync(path.join(root, f))) && shell.includes("./transfer.js") && shell.includes("./gen.js"));
+  check("sw.js の SHELL のファイルが全部ある（transfer.js・深さの depth.js も入っている）", shell.every((f) => f === "./" || existsSync(path.join(root, f))) && shell.includes("./transfer.js") && shell.includes("./depth.js") && shell.includes("./gen.js"));
   check("sw.js は取り直して保存する（cache: reload。game-dev.md の PWA）", /cache: "reload"/.test(sw));
   { const st = await checkSwStall(sw); check("PWA：本文の途中で通信が止まっても4秒で保存したものを返す・ふつうはネットの返事", st.ok, JSON.stringify(st)); }
   check("manifest のアイコンが全部ある", man.icons.every((i) => existsSync(path.join(root, i.src))) && existsSync(path.join(root, "og.png")));
   check("チケット・回数制限・🔒で開くモードを入れない（game-dev.md F1・F2）", !/🎫|すると開く|チケット|スタミナ|ライフ/.test(html));
   check("CSP の connect-src は 'self' のまま", /connect-src 'self';/.test(html));
   check("見やすさの設定は shared-workflows template/a11y/a11y.html の写し（a11y:begin〜end）", /<!-- a11y:begin[\s\S]*<!-- a11y:end -->/.test(html));
-  check("引き継ぎの部品を読む（data-keys は記録のキーだけ）", /<script src="transfer.js" data-game="recycle-mark" data-keys="recycle-mark-v1"><\/script>/.test(html));
+  check("引き継ぎの部品を読む（data-keys は記録・復習のキーだけ）・depth.js もゲームの script より前に読む", /<script src="transfer.js" data-game="recycle-mark" data-keys="recycle-mark-v1,recycle-mark-depth"><\/script>[^\n]*\n<script src="depth.js" data-game="recycle-mark" data-key="recycle-mark-depth"><\/script>/.test(html) && html.indexOf('src="depth.js"') < html.indexOf('src="gen.js"'));
+  { const e = await checkDepth(readFileSync(path.join(root, "depth.js"), "utf8")); check("depth.js（自信をかける・復習）の動き（shared-workflows template/qa/depth-check.mjs）", e.length === 0, e.join(" / ")); }
 }
 
 // 3. ブラウザで遊ぶ
@@ -234,7 +236,7 @@ try {
     check("あとから遊んだ日は ↺ になり、もう ▶ にならない", (await p.locator("[data-late]").count()) === 2 && (await p.locator(".cal .d i", { hasText: "↺" }).count()) === 1);
     await p.click("#back"); await p.click("#go-ach");
     const n = await p.locator(".achs > div").count();
-    check("実績は10〜14個で、まだのものは「いま/目標」を出す", n >= 10 && n <= 14 && (await p.textContent(".achs")).includes("いま "));
+    check("実績は10〜16個で、まだのものは「いま/目標」を出す", n >= 10 && n <= 16 && (await p.textContent(".achs")).includes("いま "));
     await p.click("#back"); await p.click("#go-dex");
     check("マーク帳の上に、9つのマークの早見（何に付けるか）がある", (await p.locator(".marks > div").count()) === Object.keys(W.M).length);
     check("マーク帳：まだの種類は名前を出さず「？？？」", (await p.locator(".dex .no").count()) > 0 && (await p.textContent(".dex .no")).includes("？？？"));
@@ -258,6 +260,66 @@ try {
     check("壊れた記録（形のちがう値）でも画面が出る", (await p.locator("#go-d").count()) === 1);
     await p.close();
   }
+  { // 1問を深くする：自信をかける・復習（shared-workflows routines/game-dev.md「1問を深くする」・depth.js）
+    const DK = "recycle-mark-depth", dpOf = (p) => p.evaluate((k) => JSON.parse(localStorage.getItem(k) || "{}"), DK);
+    const setRv = (p, rv) => p.evaluate(([k, rv]) => { const d = JSON.parse(localStorage.getItem(k) || '{"v":1}'); d.rv = Object.assign(d.rv || {}, rv); localStorage.setItem(k, JSON.stringify(d)); }, [DK, rv]);
+    const tagNow = (p) => p.evaluate(() => window.__gw.tagOf(window.__gw.cur().it));
+    const p = await newPage(390, 800, setDate("2026-11-10"));
+    await closeHow(p); await p.click("#go-d");
+    const sb = await p.$eval("#dp-sure", (b) => [b.getBoundingClientRect().height, b.getAttribute("aria-pressed"), b.textContent]);
+    check("問題の画面に「🎯 自信あり？」のボタン（高さ44px以上・押す前は ✓ なし）", sb[0] >= 44 && sb[1] === "false" && !sb[2].includes("✓"), String(sb[0]));
+    await p.click("#dp-sure");
+    check("自信のボタンを押すと ✓ が出る（色だけで分けない）", (await p.getAttribute("#dp-sure", "aria-pressed")) === "true" && (await p.textContent("#dp-sure")).includes("✓"));
+    const t1 = await tagNow(p);
+    check("復習の鍵だけで同じ問題を作り直せる（種類|形|種）", await p.evaluate((t) => { const g = window.__gw, c = g.cur(); return JSON.stringify(g.itOf(t)) === JSON.stringify(c.it); }, t1));
+    let c = await curOf(p);
+    await p.click(`[data-j="${wrongJ(c)}"]`); await p.waitForTimeout(120);
+    check("自信ありでまちがえると、知らせに「思いこみ」と出て、自信は変えられない", (await p.textContent("#live")).includes("思いこみ") && (await p.locator("#dp-sure:disabled").count()) === 1);
+    check("まちがえたその時に復習へ入る（解き終えずにやめても残る）", !!((await dpOf(p)).rv || {})[t1]);
+    await p.click(`[data-j="${c.okJ}"]`);
+    check("答えの説明に「自信ありでまちがえた」と出る", (await p.textContent("#verdict")).includes("自信ありでまちがえた"));
+    await p.click("#next");
+    check("まちがえたあとの問題には自信のボタンが出直す（次の問題）", (await p.locator("#dp-sure").count()) === 1);
+    for (let i = 1; i < 5; i++) { await answer(p); await p.click("#next"); }
+    check("終えた直後の結果に「自信ありの当たり 0/1」が出る", (await p.locator("#surestat").count()) === 1 && (await p.textContent("#surestat")).includes("0/1"));
+    let dp = await dpOf(p);
+    check("まちがえた・ヒントを使った問題だけ復習に入る・自信は1回だけ数える", Object.keys(dp.rv || {}).join() === t1 && dp.sure === 1 && dp.sureOk === 0, Object.keys(dp.rv || {}).join() + " sure=" + dp.sure);
+    const before = await p.evaluate(() => JSON.stringify(window.__gw.load().days));
+    await p.click("#home");
+    check("日の来ていない復習は、ホームに出ない", (await p.locator("#go-r").count()) === 0);
+    await setRv(p, { [t1]: { s: 0, due: "2026-01-01", t: 1 } });
+    await p.goto(url); await p.waitForTimeout(150);
+    check("日を進めると（日の来た復習があると）、ホームに「復習 1問」", ((await p.locator("#go-r").count()) ? await p.textContent("#go-r") : "").includes("復習 1問"));
+    await p.click("#go-r");
+    check("復習の画面は「復習」と出る・同じ問題", (await p.textContent("header")).includes("復習") && (await tagNow(p)) === t1);
+    await p.click("#dp-sure"); await answer(p);
+    check("自信ありで正しく選ぶと「自信ありで当てた」", (await p.textContent("#verdict")).includes("自信ありで当てた"));
+    await p.click("#next");
+    dp = await dpOf(p);
+    check("復習を終えると「復習の結果」・今日の記録は増えない・シェアは出ない", (await p.textContent("h1")).includes("復習") && (await p.evaluate(() => JSON.stringify(window.__gw.load().days))) === before && (await p.locator("#share").count()) === 0);
+    check("復習で一度で正しく選ぶと、次は3日後へ進む", dp.rv[t1] && dp.rv[t1].s === 1 && dp.rv[t1].due === "2026-11-13" && dp.sureOk === 1);
+    await p.click("#home");
+    check("復習を終えたら、ホームの「復習」は消える", (await p.locator("#go-r").count()) === 0);
+    await setRv(p, { "99|0|1": { s: 0, due: "2026-01-01", t: 2 }, "0|999|1": { s: 0, due: "2026-01-01", t: 3 }, constructor: { s: 0, due: "2026-01-01", t: 4 }, "0|0|x": { s: 0, due: "2026-01-01", t: 5 } });
+    await p.goto(url); await p.waitForTimeout(150);
+    check("作り直せない鍵（無い種類・無い形・constructor・数でない種）は復習に数えず、ホームも出る", (await p.locator("#go-d").count()) === 1 && (await p.locator("#go-r").count()) === 0);
+    // 復習の途中でヒントを使って日の来た問題が0になっても、ホームの「復習の続きから」で戻れる
+    await setRv(p, { [t1]: { s: 0, due: "2026-01-01", t: 9 } });
+    await p.goto(url); await p.waitForTimeout(150); await p.click("#go-r"); await p.click("#hint");
+    check("ヒントを使うと自信のボタンは消える（ヒントの前だけ）", (await p.locator("#dp-sure").count()) === 0);
+    check("復習の途中でヒントを使うと、その時に1日後へ戻る", (await dpOf(p)).rv[t1].due === "2026-11-11");
+    await p.goto(url); await p.waitForTimeout(150);
+    check("復習の途中で日の来た問題が0になっても、ホームの「復習の続きから」で戻れる", ((await p.locator("#go-r").count()) ? await p.textContent("#go-r") : "").includes("続きから"));
+    await p.click("#go-r");
+    check("復習の続きは同じ問題・使ったヒントはそのまま", (await tagNow(p)) === t1 && (await curOf(p)).hints === 1);
+    // 別のタブで先に進んだ古い画面でヒントを押しても、復習の段は戻らない
+    await p.evaluate(([K, DK, t]) => { const s = JSON.parse(localStorage.getItem(K)); s.runs.r.res.push({ m: 0, h: 0, t: 0 }); s.runs.r.cur = null; localStorage.setItem(K, JSON.stringify(s)); const d = JSON.parse(localStorage.getItem(DK)); d.rv[t] = { s: 2, due: "2099-01-01", t: 99 }; localStorage.setItem(DK, JSON.stringify(d)); }, [KEY, DK, t1]);
+    await p.click("#hint"); await p.waitForTimeout(100);
+    check("別のタブで先に進んだ古い画面でヒントを押しても、復習の段は戻らない", (await dpOf(p)).rv[t1].s === 2);
+    const cal1 = await p.evaluate(() => { const s = window.__gw.load(); return Object.keys(s.days).length + "/" + Object.keys(s.adays).length; });
+    check("復習はカレンダー・あとからの記録に入らない", cal1 === "1/0", cal1);
+    await p.close();
+  }
   { // スマホ幅・押せる大きさ
     const p = await newPage(320, 640, setDate("2026-11-10"));
     await closeHow(p);
@@ -269,7 +331,7 @@ try {
     await p.close();
   }
   { // 引き継ぎコード（shared-workflows template/qa/transfer-check.mjs）
-    const sample = { [KEY]: JSON.stringify({ v: 1, tut: true, days: { "2026-11-07": { r: [{ m: 0, h: 0, t: 3 }] } }, hdays: {}, adays: {}, dex: { 3: 1 }, total: 1, ebest: 2, runs: {}, kofi: {}, ach: {}, t: 1 }) };
+    const sample = { [KEY]: JSON.stringify({ v: 1, tut: true, days: { "2026-11-07": { r: [{ m: 0, h: 0, t: 3 }] } }, hdays: {}, adays: {}, dex: { 3: 1 }, total: 1, ebest: 2, runs: {}, kofi: {}, ach: {}, t: 1 }), "recycle-mark-depth": JSON.stringify({ v: 1, rv: { "3|0|5": { s: 1, due: "2026-11-20", t: 5 } } }) }; // 復習の記録も引き継ぐかを見る
     await checkTransfer({ browser, url, game: "recycle-mark", sample, check, open: async (page) => { await page.evaluate(() => { const d = document.getElementById("howto"); if (d.open) d.close(); }); } });
   }
   { // 知らせ（.toast）は下のボタンを塞がない（shared-workflows incidents/2026-11-17-known-game-bugs-spread.md）

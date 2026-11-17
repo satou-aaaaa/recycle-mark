@@ -98,6 +98,8 @@ h2.sec{font-size:16px;margin:14px 0 6px}
 .shares{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 .shares a,.shares button{display:flex;align-items:center;justify-content:center;min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--paper);color:var(--ink);font-size:14px;font-weight:800;text-decoration:none;padding:0 6px;box-sizing:border-box;font-family:inherit;cursor:pointer}
 .res{display:flex;flex-direction:column;gap:6px}
+.sure-row{display:flex;justify-content:center}
+.sure-res{margin:0;font-weight:700;text-align:center}
 .res div{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px}
 .dex{display:grid;grid-template-columns:1fr;gap:8px}
 .dex div{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.6}
@@ -133,7 +135,8 @@ html.a11y-cvd .pt.hit{border-width:4px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 :is(button,a):focus-visible{outline:3px solid #1a5fd0!important;outline-offset:2px!important}
 </style>
-<script src="transfer.js" data-game="recycle-mark" data-keys="recycle-mark-v1"></script><!-- gitleaks:allow 記録の名前（鍵ではない） -->
+<script src="transfer.js" data-game="recycle-mark" data-keys="recycle-mark-v1,recycle-mark-depth"></script><!-- gitleaks:allow 記録の名前（鍵ではない） -->
+<script src="depth.js" data-game="recycle-mark" data-key="recycle-mark-depth"></script>
 <!-- a11y:begin 見やすさの設定 v7（shared-workflows template/a11y/a11y.html の写し。ここでは直さず、ひな形を直して全部のゲームへ写す。drift-check と qa/a11y.mjs が同じ中身か見る） -->
 <style id="a11y-css">
 /* だれでも：キーボードで選んだ所に太い枠（WCAG 2.4.7・2.4.13） */
@@ -304,6 +307,7 @@ html.a11y-say body{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))!i
     <li>付けるリサイクルのマークを、札から1つ選びます。</li>
     <li>なぜそのマークか・出典が出ます。</li>
   </ol>
+  <p>答える前に「🎯 自信あり？」を押すと、見立てが当たったか分かります（★は変わりません）。まちがえた問題は、次の日から「復習」にもどってきます。</p>
   <p>答えは、経済産業省の「識別表示 Q&amp;A」などに沿っています。時間の制限はありません。ごみの出し方は市町村ごとにちがうので、住んでいる市町村の決まりに従ってください。</p>
   <p><a id="fb2" target="_blank" rel="noopener">感想を送る</a></p>
   <button class="main" id="howto-ok" style="width:100%">わかった</button>
@@ -316,6 +320,10 @@ const SITE = "https://satou-aaaaa.github.io/recycle-mark/";
 const FEEDBACK = "https://github.com/satou-aaaaa/recycle-mark/issues/new?template=feedback.yml";
 const KEY = "recycle-mark-v1", EPOCH = "2026-11-07"; // gitleaks:allow 記録の名前（鍵ではない）
 const B = window.RMARK, TY = B.TYPES, NT = TY.length;
+// 復習の鍵（depth.js）：種類|形|種。この3つだけで同じ問題を作り直せる。種類が | より前なので、復習は種類をまぜて出る
+const tagOf = (it) => `${it.t}|${it.v}|${it.s}`;
+const itOf = (tag) => { const a = String(tag).split("|"); if (a.length !== 3 || !a.every((x) => /^\d{1,10}$/.test(x))) return null; const it = { t: +a[0], v: +a[1], s: +a[2] }; return it.t < NT && it.v < B.FORMN[it.t] && it.s < 2 ** 31 ? it : null; };
+Depth.setValid((t) => { const it = itOf(t); if (!it) return false; B.make(it); return true; }); // 作り直せない鍵（引き継ぎ・消えた種類）は復習に数えない
 
 // ---- 日付と種（日本時間。だれでも同じ5問）----
 const prevDay = (k) => new Date(Date.parse(k) - 864e5).toISOString().slice(0, 10);
@@ -387,7 +395,7 @@ const dexN = (s) => TY.filter((_, i) => (s.dex[i] || 0) > 0).length;
 function lateDays(s) { const out = []; let k = todayKey(); for (let i = 0; i < 7; i++) { k = prevDay(k); if (k < EPOCH) break; if (!s.days[k] && !s.adays[k]) out.push(k); } return out; }
 const okR = (x) => x && Array.isArray(x.r);
 function achList(s) {
-  const D = Object.values(s.days).filter(okR), H = Object.values(s.hdays).filter(okR), all3 = (x) => x.r.length > 0 && x.r.every((r) => starsOf(r) === 3);
+  const D = Object.values(s.days).filter(okR), H = Object.values(s.hdays).filter(okR), all3 = (x) => x.r.length > 0 && x.r.every((r) => starsOf(r) === 3), dp = Depth.stats();
   return [
     ["はじめての1枚", "正しいマークを1つ選ぶ", s.total, 1],
     ["5つの種類", "マーク帳に5種類が集まる", dexN(s), 5],
@@ -402,6 +410,8 @@ function achList(s) {
     ["十日遊んだ", "遊んだ日が合わせて10日", playedDays(s), 10],
     ["とことん10", "とことんで、一度で正しく選んだ問題が10", s.ebest, 10],
     ["百の容器", "問題を100こ解く", s.total, 100],
+    ["たしかの目", "「自信あり」で10回、正しく選ぶ", dp.sureOk, 10],
+    ["覚えなおし", "復習で5問を覚える（3回続けて正しく選ぶ）", dp.learned, 5],
   ].map(([name, desc, cur, goal]) => ({ name, desc, cur: Math.min(+cur || 0, goal), goal, done: (+cur || 0) >= goal }));
 }
 const achDone = (s) => achList(s).filter((a) => a.done).map((a) => a.name);
@@ -429,7 +439,7 @@ function home() {
   const s = load(), k = todayKey(), done = s.days[k], hdone = s.hdays[k];
   for (const m of ["d", "h"]) { const r = s.runs[m]; if (doneOf(r) && r.date === k) { MODE = m; return finish(); } }
   const rd = s.runs.d && s.runs.d.date === k ? s.runs.d : null, rh = s.runs.h && s.runs.h.date === k ? s.runs.h : null, re = s.runs.e;
-  const st = streak(s.days), back = !done && Object.keys(s.days).length && !s.days[prevDay(k)];
+  const st = streak(s.days), back = !done && Object.keys(s.days).length && !s.days[prevDay(k)], rv = Depth.count();
   show(`
     <h1 class="title">リサイクルマークよみ</h1>
     <div class="demo">${DEMO}</div>
@@ -437,6 +447,7 @@ function home() {
     ${back ? `<p class="note">おかえりなさい。今日の5問が待っています。</p>` : ""}
     ${done ? `<div class="share">今日の結果　${done.r.map(sq).join("")}</div>` : ""}
     <button class="main" id="go-d">${done ? "今日の結果を見る" : rd ? `続きから（${rd.res.length + 1}問目）` : `今日の5問 <small>#${dayNo(k)}</small>`}</button>
+    ${s.runs.r && !doneOf(s.runs.r) ? `<button class="main alt" id="go-r">復習の続きから（${s.runs.r.res.length + 1}問目）</button>` : rv ? `<button class="main alt" id="go-r">復習 ${rv}問 <small>まちがえた問題がもどってきた</small></button>` : ""}
     <button class="main alt" id="go-e">とことん：何問続けて正しく選べる？<small>${re ? `続きから（${re.res.length}問）` : `一度で正しく選んだ最高 ${s.ebest}問`}</small></button>
     <button class="sub" id="go-h">${hdone ? "上級の結果を見る" : rh ? "上級の続きから" : "上級：3問・ヒントなし・札4枚"}</button>
     <div class="row"><button class="sub" id="go-dex">マーク帳 ${dexN(s)}/${NT}</button><button class="sub" id="go-ach">実績 ${achDone(s).length}/${achList(s).length}</button></div>
@@ -447,27 +458,34 @@ function home() {
   $("go-d").onclick = () => (k !== todayKey() ? home() : done ? result("d") : startRun("d"));
   $("go-h").onclick = () => (k !== todayKey() ? home() : hdone ? result("h") : startRun("h"));
   $("go-e").onclick = () => startRun("e");
+  if ($("go-r")) $("go-r").onclick = () => startRun("r");
   $("go-dex").onclick = dex;
   $("go-ach").onclick = ach;
   $("go-cal").onclick = () => cal();
   bindFooter();
   if (!s.tut) openHow();
 }
+const rid = () => Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36); // 回の名札
 const runKey = (mode, date) => (mode === "a" ? "a:" + date : mode);
 function startRun(mode, date) {
   const k = mode === "a" ? date : todayKey();
-  let refuse = false;
+  let refuse = false, none = false;
   save((s) => {
     const rk = runKey(mode, k), r = s.runs[rk];
     if (mode === "a" && (!lateDays(s).includes(k) || s.adays[k])) { refuse = true; return; } // 期限を過ぎた・もう遊んだ日は始めない
+    // 復習：日の来た問題（depth.js）。種類をまぜて多くて10問。今日の記録・連続・Ko-fi・カレンダーには数えない
+    // 途中の復習は、日が替わっても続きから（復習の途中でまちがえると日が明日へずれて、日の来た数が0になるため）
+    if (mode === "r") { if (r && !doneOf(r)) return; const list = Depth.due().map(itOf).filter(Boolean); if (!list.length) { refuse = none = true; return; } s.runs.r = { mode, date: k, list, res: [], cur: null, id: rid() }; return; }
     if (mode === "e" && r) return; // とことんは続きから
     if (mode !== "e" && r && r.date === k && !doneOf(r)) return; // 続きから
     if ((mode === "d" && s.days[k]) || (mode === "h" && s.hdays[k])) { refuse = true; return; } // 別のタブで今日の分を終えていた
     const list = mode === "d" || mode === "a" ? dailyList(k) : mode === "h" ? hardList(k) : endlessList(s.elast);
-    s.runs[rk] = { mode, date: k, list, res: [], cur: null, id: Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36) };
+    s.runs[rk] = { mode, date: k, list, res: [], cur: null, id: rid() };
   });
+  if (none) toast("今日の復習はありません");
   if (refuse) return home();
   MODE = runKey(mode, k);
+  Depth.runStart();
   play();
 }
 
@@ -481,7 +499,8 @@ function play() {
   if (run.mode === "e" && i >= run.list.length) { save((t) => { const r = t.runs[MODE]; if (r && r.id === run.id && r.list.length <= i) r.list = r.list.concat(endlessList(r.list[r.list.length - 1].t)); }); return play(); }
   const it = run.list[i], q = qOf(it), hard = run.mode === "h", ch = B.choices(it, hard ? 4 : 3);
   const sv = run.cur && run.cur.i === i && validCur(run.cur, q, ch) ? run.cur : null;
-  cur = Object.assign({ i, id: run.id, date: run.date, mode: run.mode, it, q, ch, hard, ph: "pick", m: 0, hints: 0, bad: [], out: [], look: false }, sv || {});
+  cur = Object.assign({ i, id: run.id, date: run.date, mode: run.mode, it, q, ch, hard, ph: "pick", m: 0, hints: 0, bad: [], out: [], look: false, jd: null }, sv || {});
+  cur.jd = cur.jd && typeof cur.jd === "object" && cur.jd.sure === true ? { sure: true, ok: cur.jd.ok === true, text: "" } : null;
   draw();
 }
 // 保存してあった途中経過が、この問題で正しいか
@@ -491,9 +510,12 @@ function validCur(c, q, ch) {
 }
 const same = (r) => r && cur && r.id === cur.id && r.res.length === cur.i && JSON.stringify(r.list[cur.i]) === JSON.stringify(cur.it);
 // 途中を保存する（同じ回・同じ問題のときだけ。まちがい・ヒントの数は別のタブの分より減らさない）
-function keep() { let ok = false; save((s) => { const r = s.runs[MODE]; if (!same(r)) return; ok = true; const o = r.cur && r.cur.i === cur.i ? r.cur : null; if (o) { cur.m = Math.max(cur.m, o.m || 0); cur.hints = Math.max(cur.hints, o.hints || 0); } r.cur = { i: cur.i, ph: cur.ph, m: cur.m, hints: cur.hints, bad: cur.bad, out: cur.out, look: cur.look }; }); return ok; }
+// まちがえた・ヒントを使ったその時に復習へ入れる（とことんで降りる・閉じるなど、解き終えずにやめても残る）
+function early() { if (cur && cur.ph === "pick" && (cur.m || cur.hints)) Depth.mark(tagOf(cur.it), 1, cur.q.scene); }
+// keep は保存した回が同じ問題のときだけ early する（別のタブで先に進んだ古い画面が、復習の段を戻さない）
+function keep() { let ok = false; save((s) => { const r = s.runs[MODE]; if (!same(r)) return; ok = true; const o = r.cur && r.cur.i === cur.i ? r.cur : null; if (o) { cur.m = Math.max(cur.m, o.m || 0); cur.hints = Math.max(cur.hints, o.hints || 0); if (!cur.jd && o.jd && o.jd.sure === true) cur.jd = { sure: true, ok: o.jd.ok === true, text: "" }; } r.cur = { i: cur.i, ph: cur.ph, m: cur.m, hints: cur.hints, bad: cur.bad, out: cur.out, look: cur.look, jd: cur.jd ? { sure: true, ok: cur.jd.ok } : null }; }); if (ok) early(); return ok; }
 function stale() { toast("別のタブで進んでいます。読み直します"); play(); }
-const lbl = () => { const r = load().runs[MODE]; if (!r) return ""; return cur.mode === "e" ? `とことん ${cur.i + 1}問目` : `${cur.mode === "h" ? "上級" : cur.mode === "a" ? md(cur.date) + "の5問" : "今日の5問"} ${cur.i + 1}/${r.list.length}`; };
+const lbl = () => { const r = load().runs[MODE]; if (!r) return ""; return cur.mode === "e" ? `とことん ${cur.i + 1}問目` : `${cur.mode === "r" ? "復習" : cur.mode === "h" ? "上級" : cur.mode === "a" ? md(cur.date) + "の5問" : "今日の5問"} ${cur.i + 1}/${r.list.length}`; };
 // マーク帳の早見（どのマークを、何に付けるか）
 const MARKS = [
   ["PET", "飲み物・お酒・しょうゆなどのペットボトル（法律で表示）"],
@@ -527,12 +549,14 @@ function draw() {
     </div>
     <p class="ask" id="ask" data-a11y-say>${c.ph === "pick" ? esc(q.ask) : ""}</p>
     ${c.look && c.ph === "pick" ? `<p class="tipbox" data-a11y-say>ヒント：${esc(q.tip)}</p>` : ""}
+    ${c.ph === "pick" && !c.m && !c.hints ? `<div class="sure-row">${Depth.sureHtml()}</div>` : ""}
     <div class="chs" id="chs" role="group" aria-label="答えの札">${c.ch.map(chHtml).join("")}</div>
     <div id="panel"></div>
     ${run.mode === "e" ? `<button class="sub" id="quit">ここでやめる</button>` : ""}`);
   $("back").onclick = home;
   if ($("quit")) $("quit").onclick = quitEndless;
   $("chs").onclick = (ev) => { const el = ev.target.closest("[data-j]"); if (el) tap(+el.dataset.j); };
+  Depth.bindSure(tagOf(c.it), c.id + "|" + c.i); // 回の印：別のタブ・開き直したあとで同じ問題を2回数えない
   panel();
 }
 function panel() {
@@ -545,10 +569,13 @@ function panel() {
 function tap(j) {
   const c = cur; if (c.ph !== "pick" || c.bad.includes(j) || c.out.includes(j)) return;
   if (c.ch[j] === c.q.ok) return solve();
+  const jd = Depth.judge(false); if (jd && jd.sure) { c.jd = jd; sureCount(false); } // 自信は最初に押した1枚で見る
   c.m++; c.bad.push(j); if (!keep()) return stale(); buzz(8);
   const b = document.querySelector(`[data-j="${j}"]`); if (b) b.outerHTML = chHtml(c.ch[j], j);
-  say("✕ ちがいます。ほかの札も見てみよう。");
+  say(`✕ ちがいます。${jd && jd.text ? jd.text : "ほかの札も見てみよう。"}`);
 }
+// この回の「自信あり」の数と当たり（結果の画面に出す。同じ回の同じ問題は1回だけ）
+function sureCount(ok) { const q = cur.i + ":" + tagOf(cur.it); save((s) => { const r = s.runs[MODE]; if (!same(r) || r.dsq === q) return; r.dsq = q; r.ds = r.ds || { n: 0, ok: 0 }; r.ds.n++; if (ok) r.ds.ok++; }); }
 function hint() {
   const c = cur; if (c.hard || c.hints >= 2 || c.ph !== "pick") return;
   if (!c.look) { c.look = true; c.hints++; if (!keep()) return stale(); draw(); return say(`ヒント：${c.q.tip}`); }
@@ -561,6 +588,7 @@ function hint() {
 // 正しいマークを選んだ：記録して、なぜそうするかと出典を見せる
 function solve() {
   const c = cur, q = c.q, rec = { m: c.m, h: c.hints, t: q.t };
+  const jd = Depth.judge(true); if (jd && jd.sure) { c.jd = jd; sureCount(true); }
   let ok = false;
   save((s) => {
     const r = s.runs[MODE]; if (!same(r)) return; ok = true;
@@ -570,6 +598,7 @@ function solve() {
     if (doneOf(r)) bank(s, r);
   });
   if (!ok) return stale();
+  Depth.mark(tagOf(c.it), c.m + c.hints, q.scene); // まちがい・ヒントがあれば復習へ、復習中なら次の間へ
   c.ph = "done"; buzz(25);
   const st = starsOf(rec);
   $("chs").innerHTML = c.ch.map(chHtml).join("");
@@ -579,10 +608,11 @@ function solve() {
   $("panel").innerHTML = `<div class="verdict" id="verdict">
       <div class="hd">✓ 正しい　${starStr(st)}</div>
       <div class="nm" data-a11y-say>${esc(q.ok)}</div>
+      ${c.jd && c.jd.sure ? `<p class="sure-res">${c.jd.ok ? "🎯 自信ありで当てた" : "🎯 自信ありでまちがえた。ここを覚えよう"}</p>` : ""}
       <p data-a11y-say><b>なぜ</b>　${esc(q.why)}</p>
       <p class="srcs">出典：${q.src.map(([n, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(n)}</a>`).join("・")}</p>
       <button class="main" id="next">${MODE === "e" ? "次の問題" : last ? "結果を見る" : "次の問題"}</button></div>`;
-  say(`✓ 正しい。${q.ok}。${q.why}`);
+  say(`✓ 正しい。${jd && jd.text ? jd.text : ""}${q.ok}。${q.why}`);
   $("next").onclick = () => (MODE !== "e" && last ? finish() : play());
   $("next").focus();
 }
@@ -595,18 +625,40 @@ function quitEndless() {
   show(`<header><button class="icon" id="back" aria-label="ホームへもどる">←</button><h1>とことんの結果</h1><span></span></header>
     <p class="big" style="text-align:center;font-size:24px;font-weight:800;margin:0">${n}問を解いた</p>
     <div class="res"><div><span>一度で正しく選んだ</span><b>${one}問</b></div><div><span>まちがい</span><b>${miss}回</b></div><div><span>ヒント</span><b>${h}回</b></div><div><span>自己ベスト（一度で）</span><b>${s.ebest}問</b></div></div>
+    ${r.ds && r.ds.n ? `<p class="note" id="surestat">🎯 自信ありの当たり ${r.ds.ok}/${r.ds.n}</p>` : ""}
     ${na ? `<p class="note">🎯 次の実績「${esc(na.name)}」：${na.cur}/${na.goal}</p>` : ""}
     <button class="main alt" id="again">もう一度とことん</button><button class="sub" id="home">ホームへ</button>${footer()}`);
   $("back").onclick = home; $("home").onclick = home; $("again").onclick = () => startRun("e"); bindFooter();
   say(`${n}問を解きました。一度で正しく選んだのは${one}問。`);
 }
+let JUST = null; // 回を終えた直後の結果なら、その回の「自信あり」の数と当たり
 function finish() {
   const s = load(), r = s.runs[MODE];
   if (!r) return home();
   const mode = r.mode, date = r.date;
+  JUST = r.ds || null;
   save((t) => { bank(t, r); const x = t.runs[MODE]; if (x && x.id === r.id) t.runs[MODE] = null; });
+  if (mode === "r") return reviewResult(r);
   if (mode === "a") return result("a", date, true);
   result(mode, date, true);
+}
+// 復習の結果：今日の記録・連続・Ko-fi・シェアには入れない
+function reviewResult(r) {
+  const ds = JUST || { n: 0, ok: 0 }; JUST = null;
+  const s0 = load(), a0 = new Set(Object.keys(s0.ach || {})), now = achDone(s0), newA = now.filter((n) => !a0.has(n));
+  save((t) => { for (const n of now) t.ach[n] = 1; });
+  const na = nextAch(load()), rv = Depth.count();
+  show(`<header><button class="icon" id="back" aria-label="ホームへもどる">←</button><h1>復習の結果</h1><span></span></header>
+    <div class="res">${r.res.map((x, i) => `<div><span>${i + 1}. ${esc(TY[x.t] ? TY[x.t].name : "？")}</span>${starStr(starsOf(x))}</div>`).join("")}</div>
+    ${ds.n ? `<p class="note" id="surestat">🎯 自信ありの当たり ${ds.ok}/${ds.n}</p>` : ""}
+    <p class="note">一度で正しく選んだ問題は、間をあけて（3日後・7日後）また出ます。3回続けて正しく選ぶと「覚えた」。</p>
+    ${newA.length ? `<div class="newach">🏅 実績：${newA.map(esc).join("・")}</div>` : ""}
+    ${na ? `<p class="note">🎯 次の実績「${esc(na.name)}」：${na.cur}/${na.goal}</p>` : ""}
+    ${rv ? `<p class="note">今日の復習はあと${rv}問あります。</p>` : ""}
+    <button class="main alt" id="go-e">続けて遊ぶ：とことん</button>
+    <button class="sub" id="home">ホームへ</button>${footer()}`);
+  $("back").onclick = home; $("home").onclick = home; $("go-e").onclick = () => startRun("e"); bindFooter();
+  say(`復習の結果。${r.res.map((x) => "星" + starsOf(x)).join("、")}。`);
 }
 function shareText(mode, k, rec) { return `リサイクルマークよみ ${mode === "h" ? "上級" : ""}#${dayNo(k)}\n${rec.r.map(sq).join("")}\n${SITE}`; }
 function untilNext() { const n = jstNow(), ms = 864e5 - (n.getTime() % 864e5); return `${Math.floor(ms / 36e5)}時間${Math.floor((ms % 36e5) / 6e4)}分`; }
@@ -619,9 +671,10 @@ function result(mode, k, fresh1) {
   let kofi = false;
   const all3 = rec.r.every((x) => starsOf(x) === 3);
   save((t) => { for (const n of now) t.ach[n] = 1; if ((mode === "d" || mode === "h") && all3 && !t.kofi[mode + k]) { t.kofi[mode + k] = 1; kofi = !!fresh1; } });
-  const txt = shareText(mode, k, rec), na = nextAch(load());
+  const txt = shareText(mode, k, rec), na = nextAch(load()), ds = JUST || { n: 0, ok: 0 }; JUST = null; // 自信の当たりは終えた直後だけ出す
   show(`<header><button class="icon" id="back" aria-label="ホームへもどる">←</button><h1>${mode === "h" ? "上級の結果" : mode === "a" ? `${md(k)}の5問（あとから）` : "今日の結果"}</h1><span></span></header>
     <div class="res">${rec.r.map((x, i) => `<div><span>${i + 1}. ${esc(TY[x.t] ? TY[x.t].name : "？")}</span>${starStr(starsOf(x))}</div>`).join("")}</div>
+    ${ds.n ? `<p class="note" id="surestat">🎯 自信ありの当たり ${ds.ok}/${ds.n}</p>` : ""}
     ${newA.length ? `<div class="newach">🏅 実績：${newA.map(esc).join("・")}</div>` : ""}
     ${na ? `<p class="note">🎯 次の実績「${esc(na.name)}」：${na.cur}/${na.goal}</p>` : ""}
     ${mode !== "a" ? `<div class="share" id="share">${esc(txt)}</div>
@@ -686,7 +739,7 @@ function about() {
   $("back").onclick = home; $("home").onclick = home; bindFooter();
 }
 // QA 用（外からは何もできない。記録を読むだけの窓口）
-window.__gw = { load, save, dailyList, hardList, endlessList, qOf, lateDays, achList, cur: () => cur, todayKey, merge, fresh };
+window.__gw = { load, save, dailyList, hardList, endlessList, qOf, lateDays, achList, cur: () => cur, todayKey, merge, fresh, tagOf, itOf };
 home();
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
 </script>
