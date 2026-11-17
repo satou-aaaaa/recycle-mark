@@ -25,13 +25,14 @@ node qa/run.mjs   # 問題の作り方（全部の形×300の種）・マーク�
 - ★はまちがい＋ヒントの数（0で★3・1で★2・2以上で★1）。ヒントは2段（1回目は考えどころ `look`、2回目はまちがいの札を1枚外す）。時間制限は付けない。正しく選んだら必ず「なぜ」と出典を出す。
 - 好きなだけ遊べる：チケット・回数制限・🔒で開くモードを入れない。とことん（`runs.e`）は全部の種類×形を毎回ちがう並びで出し（1つの並びで同じものを出さず、続けて同じ種類を出さない。使い切ったら並びを足す）、まちがえても終わらず「ここでやめる」まで続く。自己ベスト `ebest` は一度で正しく選んだ数。今日の記録・連続・Ko-fi・シェアには数えない（マーク帳・実績には入る）。
 - 記録 `recycle-mark-v1`：`days`・`hdays`・`adays`（あとから）・`dex`（種類ごとの数）・`total`・`ebest`・`runs`（`d`・`h`・`e`・`a:日付`）・`ach`・`kofi`。保存の前に読み直し（`save`）、2つの記録は `merge` で合わせる（日ごとは両方、数は大きいほう、同じ回の途中は進んだほう）。答えを書く前に、保存した回の id と問題が同じか確かめる（`same`。古いタブで二重に数えない）。引き継ぎで入った記録は `clean` で形をそろえる。
-- 実績（`achList`、13個）は記録から毎回数える。続けるは合計の日数（`playedDays`）、連続の日は1以上のときだけ出す。取りこぼした日（きのう〜7日前・`EPOCH` から）はカレンダーから「あとから」遊べる（その日の今日の5問と同じ）。
+- 実績（`achList`、15個。「たしかの目」「覚えなおし」は depth.js の `Depth.stats()`）は記録から毎回数える。続けるは合計の日数（`playedDays`）、連続の日は1以上のときだけ出す。取りこぼした日（きのう〜7日前・`EPOCH` から）はカレンダーから「あとから」遊べる（その日の今日の5問と同じ）。
+- 深さ（`depth.js`・`qa/depth-check.mjs` は shared-workflows `template/` の写し。ここで直さない）：答える前に「🎯 自信あり？」（まちがい・ヒントの前だけ）。まちがえた・ヒントを使った問題は、その時に復習へ入る（鍵は `種類|形|種`＝`tagOf`。`Depth.setValid` で作り直せない鍵は数えない）。記録は別のキー `recycle-mark-depth`。復習（`runs.r`）は今日の記録・連続・Ko-fi・カレンダー・シェアに数えない（マーク帳・実績には入る）。途中の復習はホームの「復習の続きから」。
 - 共有は遊ぶ人が押したときに開くリンク（X・LINE・Web Share・コピー）だけ。シェアの文は四角だけで、品物・札の言葉を出さない。
 - 応援は Ko-fi（https://ko-fi.com/satouaaaaa）へのただのリンクだけ。今日の5問・上級を初めて全部★3で終えたときだけ、結果の画面に1行（共有フォルダ kofi/app-guide.md）。
 - 感想は `.github/ISSUE_TEMPLATE/feedback.yml`（shared-workflows `template/` の写し）を開くただのリンク。名前・メールは聞かない。
 - 外へ通信しない。外から読むのは Google Fonts の文字だけ（CSP の `connect-src 'self'` を広げない）。記録は遊ぶ人のブラウザ（localStorage）だけ。
 - 見やすさ：`</head>` の前の見やすさの設定（`<!-- a11y:begin -->`〜`end`）は shared-workflows `template/a11y/a11y.html` の写し、`qa/a11y.mjs` も `template/qa/a11y.mjs` の写しで、ここでは直さない。色だけで分けない（正しい札＝✓と太い枠、ちがう＝✕と破線、ヒントで外した＝点線と「これではない」、取れない星は ☆、カレンダーは ★ ↺ ▲ ▶）。札は全部ボタンで、読み上げ用の名前（「正しい：」「ちがう：」）を持つ。知らせは `#live`（role=status）。
-- 引き継ぎコード：`transfer.js`・`qa/transfer-check.mjs` は shared-workflows `template/` の写し（ここで直さない）。`data-keys` は `recycle-mark-v1`。記録の形を変えたら `qa/run.mjs` の引き継ぎの `sample` も合わせる。
+- 引き継ぎコード：`transfer.js`・`qa/transfer-check.mjs` は shared-workflows `template/` の写し（ここで直さない）。`data-keys` は `recycle-mark-v1,recycle-mark-depth`。記録の形を変えたら `qa/run.mjs` の引き継ぎの `sample` も合わせる。
 - PWA（`manifest.webmanifest`・`sw.js`・`icon-*.png`）：画面のファイルを足したら `sw.js` の `SHELL` にも足し、中身を大きく変えたら `CACHE` の版を上げる。アイコンは `node tools/make-icons.cjs`、SNS 用の絵 `og.png` は `node tools/make-og.cjs`（今日の問題を入れない）。
 - 押せる所は高さ44px以上・幅320pxではみ出さない（QA が見る）。機能を足す・直すたびに `qa/run.mjs` に検査を足す。乱数で組む部分は何百回・何年分も作って確かめる（shared-workflows `incidents/2026-10-31-roppo-empty-village.md`）。少し遅れて動く処理は、画面が替わっていたら何もしない（`VIEW`）。
 - 公開リポジトリなので、個人情報・鍵を入れない。
