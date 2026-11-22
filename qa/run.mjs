@@ -145,7 +145,7 @@ try {
   }
   { // 通しで遊ぶ：今日の5問
     const p = await newPage(390, 800, setDate("2026-11-10"));
-    check("はじめて開くと、遊び方の窓でなく吹き出しが出る", await p.evaluate(() => !document.getElementById("howto").open && !!document.getElementById("core-coach")));
+    check("はじめて開くと、遊び方の窓でなく吹き出しが出る", await p.evaluate(() => !document.getElementById("howto").open && !!document.querySelector("#core-coach:not([hidden])")));
     await closeHow(p);
     check("はじめての人も、今日・とことん・上級・マーク帳・実績・カレンダーを全部押せる（鍵なし）", await p.evaluate(() => ["go-d", "go-e", "go-h", "go-dex", "go-ach", "go-cal"].every((id) => { const b = document.getElementById(id); return b && !b.disabled; })));
     await p.click("#go-d");
