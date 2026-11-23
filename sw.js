@@ -9,7 +9,7 @@
 //      保存したものは自分の版（cacheName）からだけ探す・入れるときは HTTP の保存を通さない（cache: "reload"）・
 //      長い受信でも保存し直しが終わるまで waitUntil で待つ
 // game:begin
-const CACHE = "recycle-mark-v3";
+const CACHE = "recycle-mark-v4";
 const SHELL = ["./", "./index.html", "./gen.js", "./transfer.js", "./transfer-qr.js", "./depth.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-512-maskable.png"];
 // game:end
 
