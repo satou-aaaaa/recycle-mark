@@ -331,6 +331,16 @@ try {
     await p.goto(url); await closeHow(p); await p.click("#go-cal"); await wide("カレンダー");
     await p.close();
   }
+  { // スマホの「戻る」：ホームから別の画面を開いて戻ると、ゲームから出ずにホームへ（Core.screens.mark・route。shared-workflows routines/ui-rules.md「ページの分け方」6）
+    const p = await newPage(390, 800); await closeHow(p);
+    const r = {}, atHome = async () => (await p.locator("h1.title").isVisible()) && (await p.locator("#go-d").isVisible());
+    await p.click("#go-dex"); r.dex = new URL(p.url()).hash;
+    await p.goBack(); await p.waitForSelector("#go-d", { timeout: 3000 }); r.back1 = p.url() === url; r.home1 = await atHome();
+    await p.click("#go-d"); await p.waitForSelector(".cho"); r.play = new URL(p.url()).hash;
+    await p.goBack(); await p.waitForSelector("#go-d", { timeout: 3000 }); r.back2 = p.url() === url; r.home2 = await atHome();
+    check("スマホの「戻る」：マーク帳・遊ぶ画面から戻ると、ゲームのページのままホームに戻る", r.dex === "#dex" && r.play === "#play" && r.back1 && r.back2 && r.home1 && r.home2, JSON.stringify(r));
+    await p.close();
+  }
   { // 引き継ぎコード（shared-workflows template/qa/transfer-check.mjs）
     const sample = { [KEY]: JSON.stringify({ v: 1, tut: true, days: { "2026-11-07": { r: [{ m: 0, h: 0, t: 3 }] } }, hdays: {}, adays: {}, dex: { 3: 1 }, total: 1, ebest: 2, runs: {}, kofi: {}, ach: {}, t: 1 }), "recycle-mark-depth": JSON.stringify({ v: 1, rv: { "3|0|5": { s: 1, due: "2026-11-20", t: 5 } } }) }; // 復習の記録も引き継ぐかを見る
     await checkTransfer({ browser, url, game: "recycle-mark", sample, check, open: async (page) => { await page.evaluate(() => { const d = document.getElementById("howto"); if (d.open) d.close(); if (window.Core && Core.coach && Core.coach.active()) Core.coach.leave(); }); } });
